@@ -45,6 +45,7 @@ class StarShapeApp:
 
         self.points = []
         self.map_statistics = {}
+        self.zoom_factor = 1.5  # Zoom factor to scale the points
 
     def clear_fields(self):
         self.x_field.delete(0, tk.END)
@@ -81,8 +82,14 @@ class StarShapeApp:
             self.draw_single_point(point)
 
     def draw_single_point(self, point):
-        x, y = point
+        x, y = self.zoom_point(point)
         self.canvas.create_oval(x - 3, y - 3, x + 3, y + 3, fill="black")
+
+    def zoom_point(self, point):
+        x, y = point
+        x = x * self.zoom_factor
+        y = y * self.zoom_factor
+        return x, y
 
     def solve_task(self):
         self.generate_button_click()
@@ -119,8 +126,9 @@ class StarShapeApp:
             if isinstance(region, Polygon):
                 coords = list(region.exterior.coords)
                 for i in range(len(coords) - 1):
-                    self.canvas.create_line(coords[i][0], coords[i][1], coords[i + 1][0], coords[i + 1][1],
-                                            fill="orange")
+                    x1, y1 = self.zoom_point(coords[i])
+                    x2, y2 = self.zoom_point(coords[i + 1])
+                    self.canvas.create_line(x1, y1, x2, y2, fill="orange")
 
     def form_star_shape(self, points, n, m):
         center = self.find_centroid(points)
@@ -134,8 +142,8 @@ class StarShapeApp:
 
     def draw_convex_hull(self, hull):
         for i in range(len(hull)):
-            p1 = hull[i]
-            p2 = hull[(i + 1) % len(hull)]
+            p1 = self.zoom_point(hull[i])
+            p2 = self.zoom_point(hull[(i + 1) % len(hull)])
             self.canvas.create_line(p1[0], p1[1], p2[0], p2[1], fill="red")
 
     def find_centroid(self, points):
