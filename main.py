@@ -1,35 +1,46 @@
 import tkinter as tk
 from tkinter import messagebox
 import random
-import timea
+import time
 from shapely.geometry import Polygon, MultiPoint
 from shapely.ops import voronoi_diagram
 import numpy as np
+
 
 class StarShapeApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Star Shape and Voronoi Diagram")
 
-        self.x_field = tk.Entry(root)
-        self.y_field = tk.Entry(root)
-        self.n_field = tk.Entry(root)
-        self.m_field = tk.Entry(root)
-        self.canvas = tk.Canvas(root, width=800, height=600, bg="white")
-        self.canvas.pack()
+        # Create a frame for the inputs and buttons
+        self.control_frame = tk.Frame(root)
+        self.control_frame.pack(side=tk.LEFT, padx=10, pady=10)
 
-        tk.Label(root, text="X Coordinates:").pack()
+        # Create a canvas for drawing
+        self.canvas = tk.Canvas(root, width=800, height=600, bg="white")
+        self.canvas.pack(side=tk.RIGHT)
+
+        # Add input fields and labels
+        tk.Label(self.control_frame, text="X Coordinates:").pack()
+        self.x_field = tk.Entry(self.control_frame)
         self.x_field.pack()
-        tk.Label(root, text="Y Coordinates:").pack()
+
+        tk.Label(self.control_frame, text="Y Coordinates:").pack()
+        self.y_field = tk.Entry(self.control_frame)
         self.y_field.pack()
 
-        tk.Button(root, text="Clear", command=self.clear_fields).pack()
-        tk.Button(root, text="Generate with Random", command=self.generate_random).pack()
-        tk.Button(root, text="Solve Task", command=self.solve_task).pack()
+        # Add buttons
+        tk.Button(self.control_frame, text="Clear", command=self.clear_fields).pack(pady=5)
+        tk.Button(self.control_frame, text="Generate with Random", command=self.generate_random).pack(pady=5)
+        tk.Button(self.control_frame, text="Solve Task", command=self.solve_task).pack(pady=5)
 
-        tk.Label(root, text="N:").pack()
+        # Add fields for N and M
+        tk.Label(self.control_frame, text="N:").pack()
+        self.n_field = tk.Entry(self.control_frame)
         self.n_field.pack()
-        tk.Label(root, text="M:").pack()
+
+        tk.Label(self.control_frame, text="M:").pack()
+        self.m_field = tk.Entry(self.control_frame)
         self.m_field.pack()
 
         self.points = []
@@ -108,13 +119,15 @@ class StarShapeApp:
             if isinstance(region, Polygon):
                 coords = list(region.exterior.coords)
                 for i in range(len(coords) - 1):
-                    self.canvas.create_line(coords[i][0], coords[i][1], coords[i + 1][0], coords[i + 1][1], fill="orange")
+                    self.canvas.create_line(coords[i][0], coords[i][1], coords[i + 1][0], coords[i + 1][1],
+                                            fill="orange")
 
     def form_star_shape(self, points, n, m):
         center = self.find_centroid(points)
         points.sort(key=lambda p: ((p[0] - center[0]) ** 2 + (p[1] - center[1]) ** 2) ** 0.5)
         selected_points = points[:n]
-        selected_points.sort(key=lambda p: (p[1] - center[1]) / (p[0] - center[0]) if p[0] != center[0] else float('inf'))
+        selected_points.sort(
+            key=lambda p: (p[1] - center[1]) / (p[0] - center[0]) if p[0] != center[0] else float('inf'))
 
         star_shape = [selected_points[(i * m) % n] for i in range(n)]
         return star_shape
@@ -131,6 +144,7 @@ class StarShapeApp:
         centroid_x = sum(x_coords) / len(points)
         centroid_y = sum(y_coords) / len(points)
         return centroid_x, centroid_y
+
 
 if __name__ == "__main__":
     root = tk.Tk()
