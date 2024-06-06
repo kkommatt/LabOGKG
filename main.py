@@ -1,160 +1,162 @@
 import tkinter as tk
-from tkinter import messagebox
 import random
-import time
-from shapely.geometry import Polygon, MultiPoint
-from shapely.ops import voronoi_diagram
+from tkinter import messagebox
+from shapely.geometry import Point, Polygon
 import numpy as np
+from scipy.spatial import Voronoi
+
+NUMBER = 1000
 
 
-class StarShapeApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Star Shape and Voronoi Diagram")
-
-        # Create a frame for the inputs and buttons
-        self.control_frame = tk.Frame(root)
-        self.control_frame.pack(side=tk.LEFT, padx=10, pady=10)
-
-        # Create a canvas for drawing
-        self.canvas = tk.Canvas(root, width=800, height=600, bg="white")
-        self.canvas.pack(side=tk.RIGHT)
-
-        # Add input fields and labels
-        tk.Label(self.control_frame, text="X Coordinates:").pack()
-        self.x_field = tk.Entry(self.control_frame)
-        self.x_field.pack()
-
-        tk.Label(self.control_frame, text="Y Coordinates:").pack()
-        self.y_field = tk.Entry(self.control_frame)
-        self.y_field.pack()
-
-        # Add buttons
-        tk.Button(self.control_frame, text="Clear", command=self.clear_fields).pack(pady=5)
-        tk.Button(self.control_frame, text="Generate with Random", command=self.generate_random).pack(pady=5)
-        tk.Button(self.control_frame, text="Solve Task", command=self.solve_task).pack(pady=5)
-
-        # Add fields for N and M
-        tk.Label(self.control_frame, text="N:").pack()
-        self.n_field = tk.Entry(self.control_frame)
-        self.n_field.pack()
-
-        tk.Label(self.control_frame, text="M:").pack()
-        self.m_field = tk.Entry(self.control_frame)
-        self.m_field.pack()
+class CircleApplication(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("Star Polygon and Inscribed Circle")
 
         self.points = []
-        self.map_statistics = {}
-        self.zoom_factor = 1.5  # Zoom factor to scale the points
+        self.scaleFactor = 1.0
+        self.lastX, self.lastY = 0, 0
 
-    def clear_fields(self):
-        self.x_field.delete(0, tk.END)
-        self.y_field.delete(0, tk.END)
-        self.n_field.delete(0, tk.END)
-        self.m_field.delete(0, tk.END)
+        self.create_widgets()
+
+    def create_widgets(self):
+        controls = tk.Frame(self)
+        controls.pack(side=tk.TOP, fill=tk.X)
+
+        tk.Label(controls, text="n: ").pack(side=tk.LEFT)
+        self.n_field = tk.Entry(controls)
+        self.n_field.pack(side=tk.LEFT)
+
+        tk.Label(controls, text="m: ").pack(side=tk.LEFT)
+        self.m_field = tk.Entry(controls)
+        self.m_field.pack(side=tk.LEFT)
+
+        tk.Label(controls, text="X Coordinates: ").pack(side=tk.LEFT)
+        self.x_field = tk.Entry(controls, width=20)
+        self.x_field.pack(side=tk.LEFT)
+
+        tk.Label(controls, text="Y Coordinates: ").pack(side=tk.LEFT)
+        self.y_field = tk.Entry(controls, width=20)
+        self.y_field.pack(side=tk.LEFT)
+
+        self.generate_button = tk.Button(controls, text="Generate", command=self.generate)
+        self.generate_button.pack(side=tk.LEFT)
+
+        self.generate_randomly = tk.Button(controls, text="Randomly", command=self.random_points)
+        self.generate_randomly.pack(side=tk.LEFT)
+
+        self.clear_button = tk.Button(controls, text="Clear", command=self.clear)
+        self.clear_button.pack(side=tk.LEFT)
+
+        self.canvas = tk.Canvas(self, bg="white", width=800, height=600)
+        self.canvas.pack(fill=tk.BOTH, expand=True)
+
+        self.canvas.bind("<MouseWheel>", self.zoom)
+
+    def generate(self):
+        try:
+            x = list(map(float, self.x_field.get().split()))
+            y = list(map(float, self.y_field.get().split()))
+            x_coords = np.array(x) * 100
+            y_coords = np.array(y) * 100
+            n = int(self.n_field.get())
+            m = int(self.m_field.get())
+            if len(x_coords) != len(y_coords):
+                raise ValueError("X and Y coordinates must have the same length.")
+        except ValueError as e:
+            messagebox.showerror("Invalid input", str(e))
+            return
+
+        self.points = [Point(x, y) for x, y in zip(x_coords, y_coords)]
+
+        if len(self.points) < n:
+            messagebox.showerror("Invalid input", "Number of points must be at least n.")
+            return
+
+        self.draw_points()
+        star_shape = self.form_star_shape(self.points, n, m)
+        self.draw_star_shape(star_shape)
+        self.draw_voronoi_diagram(star_shape)
+        self.draw_largest_inscribed_circle(star_shape)
+
+    def random_points(self):
+        points = []
+        for i in range(NUMBER):
+            points.append(Point(random.randint(0, 100) * 10, random.randint(0, 100) * 10))
+        self.points = points
+        self.draw_points()
+        star_shape = self.form_star_shape(self.points, NUMBER, 1)
+        self.draw_star_shape(star_shape)
+        self.draw_voronoi_diagram(star_shape)
+        self.draw_largest_inscribed_circle(star_shape)
+
+    def clear(self):
         self.canvas.delete("all")
         self.points = []
-
-    def generate_random(self):
-        num_points = random.randint(5, 20)
-        x_coords = [random.uniform(50, 750) for _ in range(num_points)]
-        y_coords = [random.uniform(50, 550) for _ in range(num_points)]
-        self.x_field.delete(0, tk.END)
-        self.y_field.delete(0, tk.END)
-        self.x_field.insert(0, " ".join(map(str, x_coords)))
-        self.y_field.insert(0, " ".join(map(str, y_coords)))
-
-    def generate_button_click(self):
-        try:
-            x_coords = list(map(float, self.x_field.get().split()))
-            y_coords = list(map(float, self.y_field.get().split()))
-            if len(x_coords) != len(y_coords):
-                messagebox.showerror("Input Error", "X and Y coordinates must have the same length.")
-                return
-            self.points = list(zip(x_coords, y_coords))
-            self.draw_points()
-        except ValueError:
-            messagebox.showerror("Input Error", "Please enter valid numbers for coordinates.")
 
     def draw_points(self):
         self.canvas.delete("all")
         for point in self.points:
-            self.draw_single_point(point)
-
-    def draw_single_point(self, point):
-        x, y = self.zoom_point(point)
-        self.canvas.create_oval(x - 3, y - 3, x + 3, y + 3, fill="black")
-
-    def zoom_point(self, point):
-        x, y = point
-        x = x * self.zoom_factor
-        y = y * self.zoom_factor
-        return x, y
-
-    def solve_task(self):
-        self.generate_button_click()
-        start_time = time.time()
-        try:
-            n = int(self.n_field.get())
-            m = int(self.m_field.get())
-        except ValueError:
-            messagebox.showerror("Input Error", "Please enter valid values for n and m.")
-            return
-
-        if len(self.points) < n:
-            messagebox.showerror("Input Error", "Not enough points to form the star shape.")
-            return
-
-        self.canvas.delete("all")
-        self.draw_points()
-
-        star_shape = self.form_star_shape(self.points, n, m)
-        self.draw_convex_hull(star_shape)
-
-        star_polygon = Polygon(star_shape)
-        voronoi_diagram_geom = voronoi_diagram(MultiPoint(self.points))
-
-        self.draw_voronoi_diagram(voronoi_diagram_geom, star_polygon)
-
-        end_time = time.time()
-        execution_time = (end_time - start_time) * 1000  # in milliseconds
-        self.map_statistics[n] = execution_time
-        print(f"Execution Time: {execution_time:.2f} ms")
-
-    def draw_voronoi_diagram(self, voronoi_diagram, star_polygon):
-        for region in voronoi_diagram:
-            if isinstance(region, Polygon):
-                coords = list(region.exterior.coords)
-                for i in range(len(coords) - 1):
-                    x1, y1 = self.zoom_point(coords[i])
-                    x2, y2 = self.zoom_point(coords[i + 1])
-                    self.canvas.create_line(x1, y1, x2, y2, fill="orange")
+            self.canvas.create_oval(point.x - 2, point.y - 2, point.x + 2, point.y + 2, fill="black")
 
     def form_star_shape(self, points, n, m):
-        center = self.find_centroid(points)
-        points.sort(key=lambda p: ((p[0] - center[0]) ** 2 + (p[1] - center[1]) ** 2) ** 0.5)
-        selected_points = points[:n]
-        selected_points.sort(
-            key=lambda p: (p[1] - center[1]) / (p[0] - center[0]) if p[0] != center[0] else float('inf'))
+        if len(points) < n:
+            raise ValueError("Not enough points to form the star shape.")
 
-        star_shape = [selected_points[(i * m) % n] for i in range(n)]
+        center = self.find_centroid(points)
+
+        sorted_points = sorted(points, key=lambda p: np.arctan2(p.y - center.y, p.x - center.x))
+
+        star_shape = []
+        for i in range(n):
+            index = (i * m) % n
+            star_shape.append(sorted_points[index])
+
         return star_shape
 
-    def draw_convex_hull(self, hull):
-        for i in range(len(hull)):
-            p1 = self.zoom_point(hull[i])
-            p2 = self.zoom_point(hull[(i + 1) % len(hull)])
-            self.canvas.create_line(p1[0], p1[1], p2[0], p2[1], fill="red")
+    def draw_star_shape(self, star_shape):
+        for i in range(len(star_shape)):
+            p1 = star_shape[i]
+            p2 = star_shape[(i + 1) % len(star_shape)]
+            self.canvas.create_line(p1.x, p1.y, p2.x, p2.y, fill="red", width=2)
+
+    def draw_voronoi_diagram(self, star_shape):
+        vor = Voronoi(np.array([[p.x, p.y] for p in star_shape], dtype=np.float32))
+        for x, y in vor.vertices:
+            self.canvas.create_oval(x - 2, y - 2, x + 2, y + 2, fill="blue")
 
     def find_centroid(self, points):
-        x_coords = [p[0] for p in points]
-        y_coords = [p[1] for p in points]
-        centroid_x = sum(x_coords) / len(points)
-        centroid_y = sum(y_coords) / len(points)
-        return centroid_x, centroid_y
+        centroid = Point(sum(p.x for p in points) / len(points), sum(p.y for p in points) / len(points))
+        return centroid
+
+    def draw_largest_inscribed_circle(self, star_shape):
+        star_polygon = Polygon([(p.x, p.y) for p in star_shape])
+        vor = Voronoi(np.array([[p.x, p.y] for p in star_shape], dtype=np.float32))
+
+        largest_circle = None
+        max_radius = 0
+
+        for point in vor.vertices:
+            point_point = Point((point[0], point[1]))
+            if star_polygon.contains(point_point):
+                radius = Point(point_point).distance(star_polygon.exterior)
+                if radius > max_radius:
+                    max_radius = radius
+                    largest_circle = point_point
+
+        if largest_circle:
+            x, y = largest_circle.x, largest_circle.y
+            self.canvas.create_oval(x - max_radius, y - max_radius, x + max_radius, y + max_radius, outline="green",
+                                    width=2)
+            messagebox.showinfo("The largest inner circle",
+                                f"Coordinates: {np.round(x / 100, 2), np.round(y / 100, 2)}, Radius {np.round(max_radius / 100, 2)}")
+
+    def zoom(self, event):
+        factor = 1.1 if event.delta > 0 else 0.9
+        self.scaleFactor *= factor
+        self.canvas.scale("all", self.canvas.winfo_width() / 2, self.canvas.winfo_height() / 2, factor, factor)
 
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    app = StarShapeApp(root)
-    root.mainloop()
+    app = CircleApplication()
+    app.mainloop()
